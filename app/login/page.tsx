@@ -14,54 +14,29 @@ const cormorant = Cormorant({ subsets: ["latin"], weight: ["300", "400", "600"] 
 const inter = Inter({ subsets: ["latin"] });
 
 export default function LoginPage() {
-  const [studentNumber, setStudentNumber] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null)
-    setLoading(true)
+  const handleGoogleLogin = async () => {
+  setError(null)
+  setLoading(true)
 
-    // Validate student number format (should be numbers only)
-    if (!/^\d+$/.test(studentNumber)) {
-      setError("Student number must contain only numbers")
-      setLoading(false)
-      return
-    }
-
-    // Combine student number with domain
-    const fullEmail = `${studentNumber}@gordoncollege.edu.ph`;
-
-    try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: fullEmail,
-        password,
-      })
-
-      setLoading(false)
-
-      if (signInError) {
-        setError("Invalid student number or password")
-        return
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${location.origin}/auth/callback`,
+      queryParams: {
+        hd: "gordoncollege.edu.ph"
       }
-
-      // Signed in successfully — redirect to home
-      router.replace('/home')
-    } catch (err: any) {
-      setLoading(false)
-      setError('An unexpected error occurred')
     }
-  };
+  })
 
-  const handleStudentNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only allow numbers
-    const value = e.target.value.replace(/\D/g, '');
-    setStudentNumber(value);
-    if (error) setError(null);
-  };
+  if (error) {
+    setError("Unable to login with Google")
+    setLoading(false)
+  }
+}
 
   return (
     <div className={`flex min-h-screen ${inter.className}`}>
@@ -116,71 +91,37 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-2xl px-8">
           <div className="mb-12">
-            <h2 className={`text-5xl font-light mb-2 ${cormorant.className}`} style={{ color: '#3D5A4C' }}>Welcome Back</h2>
-            <div className="w-64 h-1 bg-pink-600 mb-3"></div>
+            <h2 className={`text-5xl font-light mb-5 ${cormorant.className}`} style={{ color: '#3D5A4C' }}>Welcome</h2>
+            <div className="w-80 h-1 bg-pink-600 mb-4"></div>
             <p className="text-gray-600 text-base font-medium">
-              Please sign in with your student number to access your reservation details.
+              Please sign in using your Gordon College Google account.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
-            <div>
-              <label htmlFor="studentNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                Student Number<span className="text-pink-600">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="studentNumber"
-                  type="text"
-                  value={studentNumber}
-                  onChange={handleStudentNumberChange}
-                  className="w-full px-4 py-4 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-transparent bg-white text-black pr-52"
-                  placeholder="Enter your student number"
-                  required
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                />
-                <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-base">
-                  @gordoncollege.edu.ph
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                Enter your student number only (e.g., 202312345)
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password<span className="text-pink-600">*</span>
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-4 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-600 focus:border-transparent bg-white text-black"
-                placeholder="Enter your password"
-                required
-              />
-            </div>
-
+          <div className="space-y-6">
             <button
-              type="submit"
+              onClick={handleGoogleLogin}
               disabled={loading}
-              className="w-full text-white py-4 px-4 text-lg rounded-md transition-colors font-medium tracking-wide uppercase disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#3D5A4C' }}
-              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#2d4339' }}
-              onMouseLeave={(e) => { if (!loading) e.currentTarget.style.backgroundColor = '#3D5A4C' }}
+              className="w-full flex items-center justify-center gap-3 border border-gray-300 py-4 px-4 text-lg rounded-md transition-colors font-medium bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading ? 'Logging in...' : 'Login'}
+
+              <Image
+                src="https://www.svgrepo.com/show/475656/google-color.svg"
+                alt="Google"
+                width={22}
+                height={22}
+              />
+
+              {loading ? "Redirecting..." : "Sign in with Google"}
+
             </button>
 
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-sm text-red-600" role="alert">{error}</p>
+                <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
-          </form>
+          </div>
 
           <div className="mt-8 text-center">
             <p className="text-gray-500 text-sm">
