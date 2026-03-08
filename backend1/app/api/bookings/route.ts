@@ -6,7 +6,7 @@ const bookingSchema = z.object({
   start_at: z.string().min(1, 'start_at is required'),
   end_at: z.string().min(1, 'end_at is required'),
   guests: z.number().int().positive().optional(),
-  amenities: z.array(z.string()).optional(),
+  amenities: z.array(z.number()).optional(),
 });
 
 export async function OPTIONS(request: Request) {
@@ -69,16 +69,16 @@ export async function POST(request: Request) {
       })
       .select()
       .single();
-//amenities using str
+    //amenities using str
     if (bookingError) {
       return jsonWithCors({ error: bookingError.message }, { status: 500 }, request);
     }
     if (amenities && amenities.length > 0) {
 
-      const bookingAmenities = amenities.map((amenityId: string) => ({
-        booking_id: booking.id,
-        amenity_id: parseInt(amenityId),
-      }));
+    const bookingAmenities = amenities.map((amenityId: number) => ({
+      booking_id: booking.id,
+      amenity_id: amenityId,
+    }));
 
       const { error: amenityError } = await supabase
         .from('booking_amenities')
