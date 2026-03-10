@@ -3,7 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Cormorant, Inter, Montserrat } from "next/font/google";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../../lib/supabaseClient";
 import chtmlogo from '../images/chtmlogo.png';
 import gcllgo from '../images/gcllgo.jpg';
 
@@ -17,15 +18,106 @@ export default function BookingPage() {
   const [currentMonth, setCurrentMonth] = useState("February");
   const [currentYear, setCurrentYear] = useState(2026);
   const [guests, setGuests] = useState(2);
-  const [roomType, setRoomType] = useState("Room A");
-  const [amenities, setAmenities] = useState("Full Air Condition");
+  const availableAmenities = [
+    { id: 1, name: "Full Air Condition", price: 50 },
+    { id: 2, name: "Basic", price: 0 },
+  ];
 
-  const daysInMonth = 28; // February 2026
-  const firstDayOfWeek = 6; // February 1, 2026 is Sunday
+  const [selectedAmenities, setSelectedAmenities] = useState<{ id: number, name: string, price: number }[]>([
+    { id: 1, name: "Full Air Condition", price: 50 }
+  ]);
+  const [rooms, setRooms] = useState<{ id: number; room_number: string }[]>([]);
+  const [roomId, setRoomId] = useState<number | null>(null);
+  const [roomTypes, setRoomTypes] = useState<{ id: number; name: string; price: number }[]>([]);
+  const [roomTypeId, setRoomTypeId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const subtotal = 450.00;
+  useEffect(() => {
+    const fetchRooms = async () => {
+      const { data, error } = await supabase.from('rooms').select('id, room_number');
+      if (!error && data) {
+        setRooms(data);
+        setRoomId(data[0]?.id ?? null);
+      }
+    };
+    const fetchRoomTypes = async () => {
+      const { data, error } = await supabase.from('room_types').select('id, name, price');
+      if (!error && data) {
+        setRoomTypes(data);
+        setRoomTypeId(data[0]?.id ?? null);
+      }
+    };
+    fetchRooms();
+    fetchRoomTypes();
+  }, []);
+
+  const handleConfirmBooking = async () => {
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("Please login first to make a booking.");
+        setLoading(false);
+        return;
+      }
+
+      if (!roomId) {
+        setError("Please select a room.");
+        setLoading(false);
+        return;
+      }
+
+      const monthIndex = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(currentMonth);
+      const dateStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
+      const start_at = `${dateStr}T09:00:00`;
+      const end_at = `${dateStr}T11:00:00`;
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          room_id: roomId,
+          room_type_id: roomTypeId,
+          start_at: new Date(start_at).toISOString(),
+          end_at: new Date(end_at).toISOString(),
+          guests,
+          amenities: selectedAmenities.map(a => a.id),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 201) {
+        setSuccess("Booking confirmed successfully!");
+      } else {
+        setError(data.error || "Booking failed. Please try again.");
+      }
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const daysInMonth = 28;
+  const firstDayOfWeek = 6;
+
+  const basePrice = 450.00;
+  const amenitiesPrice = selectedAmenities.reduce((sum, a) => sum + a.price, 0);
+  const subtotal = basePrice + amenitiesPrice;
   const taxes = 85.00;
   const total = subtotal + taxes;
+
+  const selectedRoom = rooms.find(r => r.id === roomId);
+  const selectedRoomType = roomTypes.find(rt => rt.id === roomTypeId);
 
   return (
     <div className={`min-h-screen ${inter.className}`} style={{ background: '#FFFAF5' }}>
@@ -76,7 +168,7 @@ export default function BookingPage() {
           <p style={{ fontSize: '15px', fontWeight: 700, lineHeight: '16px', color: '#FFB5C5', fontFamily: 'Inter', letterSpacing: '0px', marginBottom: '8px' }}>
             RESERVATION
           </p>
-          <h1 
+          <h1
             className={cormorantInfant.className}
             style={{ fontSize: '51px', fontWeight: 400, lineHeight: '60px', color: '#3D5A4C' }}
           >
@@ -94,20 +186,20 @@ export default function BookingPage() {
             <p style={{ fontSize: '10.2px', fontWeight: 500, lineHeight: '16px', color: 'rgba(61, 90, 76, 0.7)', fontFamily: 'Inter', marginBottom: '32px' }}>
               Check-in Date
             </p>
-            
+
             <div className="group" style={{ background: '#FFFAF5', boxShadow: '0px 4px 12px rgba(61, 90, 76, 0.08)', borderRadius: '8px', padding: '32.9px', transition: 'all 0.3s ease', border: '1px solid rgba(61, 90, 76, 0.05)' }}>
               {/* Month/Year Header */}
               <div className="flex items-center justify-between" style={{ marginBottom: '32px' }}>
-                <button 
+                <button
                   className="hover:bg-gray-100 flex items-center justify-center transition-all duration-200"
                   style={{ width: '35.99px', height: '35.99px', borderRadius: '9999px', border: 'none', background: 'transparent', cursor: 'pointer' }}
-                  onClick={() => {/* Previous month logic */}}
+                  onClick={() => {/* Previous month logic */ }}
                 >
                   <svg width="20" height="20" fill="none" stroke="#3D5A4C" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                
+
                 <div className="flex items-center" style={{ gap: '1px' }}>
                   <span style={{ fontSize: '17px', fontWeight: 400, lineHeight: '28px', color: '#3D5A4C', fontFamily: 'Inter' }}>
                     {currentMonth}
@@ -120,10 +212,10 @@ export default function BookingPage() {
                   </span>
                 </div>
 
-                <button 
+                <button
                   className="hover:bg-gray-100 flex items-center justify-center transition-all duration-200"
                   style={{ width: '35.99px', height: '35.99px', borderRadius: '9999px', border: 'none', background: 'transparent', cursor: 'pointer' }}
-                  onClick={() => {/* Next month logic */}}
+                  onClick={() => {/* Next month logic */ }}
                 >
                   <svg width="20" height="20" fill="none" stroke="#3D5A4C" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -136,8 +228,8 @@ export default function BookingPage() {
                 {/* Day Headers */}
                 <div className="grid grid-cols-7" style={{ marginBottom: '16px' }}>
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                    <div 
-                      key={day} 
+                    <div
+                      key={day}
                       className="text-center flex items-center justify-center"
                       style={{ fontSize: '10.2px', fontWeight: 700, lineHeight: '16px', color: 'rgba(61, 90, 76, 0.4)', fontFamily: 'Inter', height: '32px' }}
                     >
@@ -151,15 +243,12 @@ export default function BookingPage() {
 
                 {/* Calendar Days */}
                 <div className="grid grid-cols-7">
-                  {/* Empty cells for days before month starts */}
                   {Array.from({ length: firstDayOfWeek }).map((_, i) => (
                     <div key={`empty-${i}`} style={{ height: '48px' }} />
                   ))}
 
-                  {/* Days of the month */}
                   {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
                     const isSelected = day === selectedDate;
-
                     return (
                       <button
                         key={day}
@@ -230,8 +319,8 @@ export default function BookingPage() {
               </p>
               <div className="flex justify-between items-center hover:border-opacity-80 hover:bg-gray-50 transition-all duration-200" style={{ padding: '16px', borderBottom: '2px solid rgba(61, 90, 76, 0.15)', background: 'rgba(61, 90, 76, 0.02)', borderRadius: '8px 8px 0 0' }}>
                 <select
-                  value={roomType}
-                  onChange={(e) => setRoomType(e.target.value)}
+                  value={roomTypeId ?? ""}
+                  onChange={(e) => setRoomTypeId(Number(e.target.value))}
                   className="transition-colors duration-200"
                   style={{
                     width: '100%',
@@ -247,8 +336,9 @@ export default function BookingPage() {
                     appearance: 'none'
                   }}
                 >
-                  <option value="Room A">Room A</option>
-                  <option value="Room B">Room B</option>
+                  {roomTypes.map(rt => (
+                    <option key={rt.id} value={rt.id}>{rt.name}</option>
+                  ))}
                 </select>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D5A4C" strokeWidth="1" className="transition-transform duration-200">
                   <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -266,8 +356,11 @@ export default function BookingPage() {
               </p>
               <div className="flex justify-between items-center hover:border-opacity-80 hover:bg-gray-50 transition-all duration-200" style={{ padding: '16px', borderBottom: '2px solid rgba(61, 90, 76, 0.15)', background: 'rgba(61, 90, 76, 0.02)', borderRadius: '8px 8px 0 0' }}>
                 <select
-                  value={amenities}
-                  onChange={(e) => setAmenities(e.target.value)}
+                  value={selectedAmenities[0]?.id || ""}
+                  onChange={(e) => {
+                    const amenity = availableAmenities.find(a => a.id === Number(e.target.value));
+                    if (amenity) setSelectedAmenities([amenity]);
+                  }}
                   className="transition-colors duration-200"
                   style={{
                     width: '100%',
@@ -283,8 +376,9 @@ export default function BookingPage() {
                     appearance: 'none'
                   }}
                 >
-                  <option value="Full Air Condition">Full Air Condition</option>
-                  <option value="Basic">Basic</option>
+                  {availableAmenities.map(amenity => (
+                    <option key={amenity.id} value={amenity.id}>{amenity.name}</option>
+                  ))}
                 </select>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D5A4C" strokeWidth="1" className="transition-transform duration-200">
                   <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -328,25 +422,31 @@ export default function BookingPage() {
             <div className="space-y-0" style={{ marginBottom: '48px' }}>
               <div className="flex justify-between items-center" style={{ paddingBottom: '16px' }}>
                 <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Check-in</span>
-                <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>2/4/2026</span>
+                <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>
+                  {currentMonth.slice(0, 3)} {selectedDate}, {currentYear}
+                </span>
               </div>
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginBottom: '16px' }} />
-              
+
               <div className="flex justify-between items-center" style={{ paddingBottom: '16px' }}>
                 <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Guests</span>
                 <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>{guests}</span>
               </div>
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginBottom: '16px' }} />
-              
+
               <div className="flex justify-between items-center" style={{ paddingBottom: '16px' }}>
                 <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Room</span>
-                <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>{roomType}</span>
+                <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>
+                  {selectedRoomType?.name ?? "—"}
+                </span>
               </div>
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginBottom: '16px' }} />
-              
+
               <div className="flex justify-between items-center" style={{ paddingBottom: '0px' }}>
                 <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Amenities</span>
-                <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Air Condition</span>
+                <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter', textAlign: 'right' }}>
+                  {selectedAmenities.length > 0 ? selectedAmenities.map(a => a.name).join(", ") : "None"}
+                </span>
               </div>
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginTop: '16px' }} />
             </div>
@@ -368,14 +468,28 @@ export default function BookingPage() {
               </div>
             </div>
 
+            {/* Error/Success Messages */}
+            {error && (
+              <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(239, 68, 68, 0.2)', borderRadius: '4px', textAlign: 'center' }}>
+                <p style={{ fontSize: '12px', color: '#FCA5A5', fontFamily: 'Inter' }}>{error}</p>
+              </div>
+            )}
+            {success && (
+              <div style={{ marginBottom: '16px', padding: '12px', background: 'rgba(16, 185, 129, 0.2)', borderRadius: '4px', textAlign: 'center' }}>
+                <p style={{ fontSize: '12px', color: '#6EE7B7', fontFamily: 'Inter' }}>{success}</p>
+              </div>
+            )}
+
             {/* Confirm Button */}
             <div style={{ marginBottom: '24px' }}>
               <button
+                onClick={handleConfirmBooking}
+                disabled={loading}
                 className="group/btn hover:scale-105 transition-all duration-200"
                 style={{
                   width: '257px',
                   height: '48px',
-                  background: '#FFFAF5',
+                  background: loading ? '#ccc' : '#FFFAF5',
                   boxShadow: '0px 4px 12px rgba(255, 181, 197, 0.3)',
                   border: 'none',
                   borderRadius: '4px',
@@ -384,20 +498,21 @@ export default function BookingPage() {
                   lineHeight: '20px',
                   color: '#3D5A4C',
                   fontFamily: 'Inter',
-                  cursor: 'pointer',
+                  cursor: loading ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  margin: '0 auto'
+                  margin: '0 auto',
+                  opacity: loading ? 0.7 : 1,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#FFB5C5';
+                  if (!loading) e.currentTarget.style.background = '#FFB5C5';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#FFFAF5';
+                  if (!loading) e.currentTarget.style.background = '#FFFAF5';
                 }}
               >
-                Confirm
+                {loading ? 'Processing...' : 'Confirm'}
               </button>
             </div>
 

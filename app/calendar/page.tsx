@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Cormorant, Inter, Montserrat } from "next/font/google";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import chtmlogo from '../images/chtmlogo.png';
 import gcllgo from '../images/gcllgo.jpg';
 
@@ -12,38 +12,55 @@ const cormorant = Cormorant({ subsets: ["latin"], weight: ["300", "400", "600"] 
 const inter = Inter({ subsets: ["latin"] });
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700"] });
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
 export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(4);
   const [currentMonth, setCurrentMonth] = useState("February");
   const [currentYear, setCurrentYear] = useState(2026);
 
+  const getDayName = (day: number) => {
+    const monthIndex = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(currentMonth);
+    const date = new Date(currentYear, monthIndex, day);
+    return date.toLocaleDateString('en-US', { weekday: 'long' });
+  };
+
   const daysInMonth = 28; // February 2026
   const firstDayOfWeek = 6; // February 1, 2026 is Sunday (index 0)
 
-  const rooms = [
-    {
-      name: "Room A",
-      floor: "6th floor, Room 6**",
-      available: true
-    },
-    {
-      name: "Room B",
-      floor: "6th floor, Room 6**",
-      available: false
-    }
-  ];
+  const [rooms, setRooms] = useState([
+    { name: "Room A", floor: "6th floor, Room 6**", available: true },
+    { name: "Room B", floor: "6th floor, Room 6**", available: false },
+  ]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
 
-  const getDayName = (date: number) => {
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    // February 1, 2026 is Sunday, so we can calculate from there
-    const dayIndex = (firstDayOfWeek + date - 1) % 7;
-    return days[dayIndex];
-  };
+  // Fetch availability when date changes
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      setLoadingRooms(true);
+      try {
+        const monthIndex = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(currentMonth);
+        const dateStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
 
-  const getMonthName = (date: number) => {
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    return months[1]; // February
-  };
+        const res = await fetch(`${BACKEND_URL}/api/rooms/availability?date=${dateStr}`);
+        const data = await res.json();
+
+        if (res.ok && data.rooms) {
+          setRooms(data.rooms.map((r: any) => ({
+            name: r.name,
+            floor: r.floor ? `${r.floor}, Room ${r.number}` : `6th floor, Room 6**`,
+            available: r.available,
+          })));
+        }
+      } catch (err) {
+        console.error('Failed to fetch availability:', err);
+      } finally {
+        setLoadingRooms(false);
+      }
+    };
+
+    fetchAvailability();
+  }, [selectedDate, currentMonth, currentYear]);
 
   return (
     <div className={`min-h-screen ${inter.className}`} style={{ background: '#FFFAF5' }}>
@@ -94,7 +111,7 @@ export default function CalendarPage() {
           <p style={{ fontSize: '10.2px', fontWeight: 700, lineHeight: '16px', color: '#FFB5C5', fontFamily: 'Inter' }}>
             AVAILABILITY
           </p>
-          <h1 
+          <h1
             style={{ fontSize: '51px', fontWeight: 400, lineHeight: '60px', color: '#3D5A4C', marginTop: '8px', fontFamily: 'Cormorant Infant, serif' }}
           >
             Plan Your Visit
@@ -116,16 +133,16 @@ export default function CalendarPage() {
             <div style={{ background: '#FFFAF5', boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)', borderRadius: '2px', padding: '32px' }}>
               {/* Month/Year Header */}
               <div className="flex items-center justify-between mb-8">
-                <button 
+                <button
                   className="hover:bg-gray-100 flex items-center justify-center"
                   style={{ width: '36px', height: '36px', borderRadius: '9999px' }}
-                  onClick={() => {/* Previous month logic */}}
+                  onClick={() => {/* Previous month logic */ }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="#3D5A4C" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                
+
                 <div className="flex items-center gap-1">
                   <span style={{ fontSize: '17px', fontWeight: 400, lineHeight: '28px', color: '#3D5A4C', fontFamily: 'Inter' }}>
                     {currentMonth}
@@ -135,10 +152,10 @@ export default function CalendarPage() {
                   </span>
                 </div>
 
-                <button 
+                <button
                   className="hover:bg-gray-100 flex items-center justify-center"
                   style={{ width: '36px', height: '36px', borderRadius: '9999px' }}
-                  onClick={() => {/* Next month logic */}}
+                  onClick={() => {/* Next month logic */ }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="#3D5A4C" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -151,8 +168,8 @@ export default function CalendarPage() {
                 {/* Day Headers */}
                 <div className="grid grid-cols-7 gap-2 mb-4">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                    <div 
-                      key={day} 
+                    <div
+                      key={day}
                       className="text-center flex items-center justify-center"
                       style={{ fontSize: '10.2px', fontWeight: 700, lineHeight: '16px', color: 'rgba(61, 90, 76, 0.4)', fontFamily: 'Inter', height: '32px' }}
                     >
@@ -225,7 +242,7 @@ export default function CalendarPage() {
             <div className="bg-white border border-gray-200 rounded-lg p-8">
 
               {/* Selected Date */}
-              <h2 
+              <h2
                 className={cormorant.className}
                 style={{ fontSize: '28px', fontWeight: 600, color: '#3D5A4C', marginBottom: '32px' }}
               >
@@ -243,7 +260,7 @@ export default function CalendarPage() {
                       {room.floor}
                     </p>
                     <div className="mt-3">
-                      <span 
+                      <span
                         className="inline-block px-3 py-1 rounded text-xs font-semibold"
                         style={{
                           background: room.available ? '#10B981' : '#EF4444',
