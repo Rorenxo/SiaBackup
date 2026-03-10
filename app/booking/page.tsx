@@ -22,6 +22,7 @@ export default function BookingPage() {
     { id: 1, name: "Full Air Condition", price: 50 },
     { id: 2, name: "Basic", price: 0 },
   ];
+// testttt
 
   const [selectedAmenities, setSelectedAmenities] = useState<{ id: number, name: string, price: number }[]>([
     { id: 1, name: "Full Air Condition", price: 50 }
