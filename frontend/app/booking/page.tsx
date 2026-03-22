@@ -14,45 +14,144 @@ const inter = Inter({ subsets: ["latin"] });
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700"] });
 
 export default function BookingPage() {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
   const [selectedDate, setSelectedDate] = useState(4);
   const [currentMonth, setCurrentMonth] = useState("February");
   const [currentYear, setCurrentYear] = useState(2026);
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const [guests, setGuests] = useState(2);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("11:00");
   const availableAmenities = [
-    { id: 1, name: "Full Air Condition", price: 50 },
-    { id: 2, name: "Basic", price: 0 },
+    { id: 1, name: "Full Air Condition" },
+    { id: 2, name: "Basic" },
   ];
-// testttt
 
-  const [selectedAmenities, setSelectedAmenities] = useState<{ id: number, name: string, price: number }[]>([
-    { id: 1, name: "Full Air Condition", price: 50 }
+  const [selectedAmenities, setSelectedAmenities] = useState<{ id: number, name: string }[]>([
+    { id: 1, name: "Full Air Condition" }
   ]);
-  const [rooms, setRooms] = useState<{ id: number; room_number: string }[]>([]);
+  const [rooms, setRooms] = useState<{ id: number; label: string }[]>([]);
   const [roomId, setRoomId] = useState<number | null>(null);
-  const [roomTypes, setRoomTypes] = useState<{ id: number; name: string; price: number }[]>([]);
-  const [roomTypeId, setRoomTypeId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const renderSelect = (
+    value: string | number,
+    onChange: (value: string) => void,
+    options: Array<{ value: string | number; label: string }>,
+    placeholder?: string
+  ) => (
+    <div
+      style={{
+        position: 'relative',
+        border: '1px solid rgba(61, 90, 76, 0.15)',
+        background: '#FFFAF5',
+        borderRadius: '8px',
+        overflow: 'hidden'
+      }}
+    >
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: '100%',
+          minHeight: '52px',
+          padding: '14px 44px 14px 16px',
+          fontSize: '16px',
+          fontWeight: 400,
+          lineHeight: '24px',
+          color: '#3D5A4C',
+          fontFamily: 'Inter',
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          cursor: 'pointer',
+          appearance: 'auto',
+          WebkitAppearance: 'menulist',
+          MozAppearance: 'menulist'
+        }}
+      >
+        {placeholder && <option value="">{placeholder}</option>}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#3D5A4C"
+        strokeWidth="1.5"
+        style={{
+          position: 'absolute',
+          right: '16px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          pointerEvents: 'none'
+        }}
+      >
+        <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+
+  useEffect(() => {
+    const syncSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+
+    syncSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     const fetchRooms = async () => {
-      const { data, error } = await supabase.from('rooms').select('id, room_number');
-      if (!error && data) {
-        setRooms(data);
-        setRoomId(data[0]?.id ?? null);
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/rooms`);
+        const data = await res.json();
+
+        if (!res.ok || !Array.isArray(data)) {
+          setRooms([]);
+          setRoomId(null);
+          return;
+        }
+
+        const normalizedRooms = data
+          .sort((left, right) => {
+            const leftLabel = String(left.room_number || left.number || left.name || left.id || '');
+            const rightLabel = String(right.room_number || right.number || right.name || right.id || '');
+            return leftLabel.localeCompare(rightLabel, undefined, { numeric: true, sensitivity: 'base' });
+          })
+          .slice(0, 2)
+          .map((room, index) => ({
+            id: Number(room.id),
+            label: `Room ${index + 1}`,
+          }))
+          .filter((room) => Number.isFinite(room.id));
+
+        setRooms(normalizedRooms);
+        setRoomId(normalizedRooms[0]?.id ?? null);
+      } catch {
+        setRooms([]);
+        setRoomId(null);
       }
     };
-    const fetchRoomTypes = async () => {
-      const { data, error } = await supabase.from('room_types').select('id, name, price');
-      if (!error && data) {
-        setRoomTypes(data);
-        setRoomTypeId(data[0]?.id ?? null);
-      }
-    };
+
     fetchRooms();
-    fetchRoomTypes();
-  }, []);
+  }, [BACKEND_URL]);
 
   const handleConfirmBooking = async () => {
     setLoading(true);
@@ -73,10 +172,22 @@ export default function BookingPage() {
         return;
       }
 
-      const monthIndex = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(currentMonth);
+      const monthIndex = monthNames.indexOf(currentMonth);
+      if (monthIndex < 0) {
+        setError("Invalid month selected.");
+        setLoading(false);
+        return;
+      }
+
       const dateStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-      const start_at = `${dateStr}T09:00:00`;
-      const end_at = `${dateStr}T11:00:00`;
+      const start_at = `${dateStr}T${startTime}:00`;
+      const end_at = `${dateStr}T${endTime}:00`;
+
+      if (new Date(end_at) <= new Date(start_at)) {
+        setError("End time must be later than start time.");
+        setLoading(false);
+        return;
+      }
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/bookings`, {
         method: 'POST',
@@ -86,7 +197,6 @@ export default function BookingPage() {
         },
         body: JSON.stringify({
           room_id: roomId,
-          room_type_id: roomTypeId,
           start_at: new Date(start_at).toISOString(),
           end_at: new Date(end_at).toISOString(),
           guests,
@@ -108,17 +218,55 @@ export default function BookingPage() {
     }
   };
 
-  const daysInMonth = 28;
-  const firstDayOfWeek = 6;
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSuccess("Logged out successfully.");
+  };
 
-  const basePrice = 450.00;
-  const amenitiesPrice = selectedAmenities.reduce((sum, a) => sum + a.price, 0);
-  const subtotal = basePrice + amenitiesPrice;
-  const taxes = 85.00;
-  const total = subtotal + taxes;
+  useEffect(() => {
+    if (rooms.length === 0) {
+      return;
+    }
+
+    const roomStillExists = rooms.some((room) => room.id === roomId);
+    if (!roomStillExists) {
+      setRoomId(rooms[0]?.id ?? null);
+    }
+  }, [roomId, rooms]);
+
+  const currentMonthIndex = monthNames.indexOf(currentMonth);
+  const safeMonthIndex = currentMonthIndex >= 0 ? currentMonthIndex : 0;
+  const daysInMonth = new Date(currentYear, safeMonthIndex + 1, 0).getDate();
+  const firstDayOfWeek = new Date(currentYear, safeMonthIndex, 1).getDay();
+
+  useEffect(() => {
+    if (selectedDate > daysInMonth) {
+      setSelectedDate(daysInMonth);
+    }
+  }, [selectedDate, daysInMonth]);
+
+  const handlePreviousMonth = () => {
+    if (safeMonthIndex === 0) {
+      setCurrentMonth(monthNames[11]);
+      setCurrentYear((prev) => prev - 1);
+      return;
+    }
+
+    setCurrentMonth(monthNames[safeMonthIndex - 1]);
+  };
+
+  const handleNextMonth = () => {
+    if (safeMonthIndex === 11) {
+      setCurrentMonth(monthNames[0]);
+      setCurrentYear((prev) => prev + 1);
+      return;
+    }
+
+    setCurrentMonth(monthNames[safeMonthIndex + 1]);
+  };
 
   const selectedRoom = rooms.find(r => r.id === roomId);
-  const selectedRoomType = roomTypes.find(rt => rt.id === roomTypeId);
+  const selectedRoomLabel = selectedRoom?.label ?? "—";
 
   return (
     <div className={`min-h-screen ${inter.className}`} style={{ background: '#FFFAF5' }}>
@@ -154,9 +302,18 @@ export default function BookingPage() {
               <Link href="/calendar" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', fontWeight: 400, lineHeight: '20px' }}>
                 Calendar
               </Link>
-              <Link href="/login" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', fontWeight: 400, lineHeight: '20px' }}>
-                Login
-              </Link>
+              {isLoggedIn ? (
+                <button
+                  onClick={handleLogout}
+                  style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                >
+                  Logout
+                </button>
+              ) : (
+                <Link href="/login" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', fontWeight: 400, lineHeight: '20px' }}>
+                  Login
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -194,7 +351,7 @@ export default function BookingPage() {
                 <button
                   className="hover:bg-gray-100 flex items-center justify-center transition-all duration-200"
                   style={{ width: '35.99px', height: '35.99px', borderRadius: '9999px', border: 'none', background: 'transparent', cursor: 'pointer' }}
-                  onClick={() => {/* Previous month logic */ }}
+                  onClick={handlePreviousMonth}
                 >
                   <svg width="20" height="20" fill="none" stroke="#3D5A4C" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -216,7 +373,7 @@ export default function BookingPage() {
                 <button
                   className="hover:bg-gray-100 flex items-center justify-center transition-all duration-200"
                   style={{ width: '35.99px', height: '35.99px', borderRadius: '9999px', border: 'none', background: 'transparent', cursor: 'pointer' }}
-                  onClick={() => {/* Next month logic */ }}
+                  onClick={handleNextMonth}
                 >
                   <svg width="20" height="20" fill="none" stroke="#3D5A4C" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -310,41 +467,20 @@ export default function BookingPage() {
               </div>
             </div>
 
-            {/* Room Type */}
+            {/* Room */}
             <div>
               <h3 style={{ fontSize: '14px', fontWeight: 600, lineHeight: '20px', color: '#3D5A4C', display: 'block', marginBottom: '8px', fontFamily: 'Inter', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Room Type
+                Room
               </h3>
               <p style={{ fontSize: '10.2px', fontWeight: 400, lineHeight: '16px', color: 'rgba(61, 90, 76, 0.6)', marginBottom: '20px', fontFamily: 'Inter' }}>
                 Select your preferred room
               </p>
-              <div className="flex justify-between items-center hover:border-opacity-80 hover:bg-gray-50 transition-all duration-200" style={{ padding: '16px', borderBottom: '2px solid rgba(61, 90, 76, 0.15)', background: 'rgba(61, 90, 76, 0.02)', borderRadius: '8px 8px 0 0' }}>
-                <select
-                  value={roomTypeId ?? ""}
-                  onChange={(e) => setRoomTypeId(Number(e.target.value))}
-                  className="transition-colors duration-200"
-                  style={{
-                    width: '100%',
-                    fontSize: '18px',
-                    fontWeight: 400,
-                    lineHeight: '1px',
-                    color: '#3D5A4C',
-                    fontFamily: 'Inter',
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    cursor: 'pointer',
-                    appearance: 'none'
-                  }}
-                >
-                  {roomTypes.map(rt => (
-                    <option key={rt.id} value={rt.id}>{rt.name}</option>
-                  ))}
-                </select>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D5A4C" strokeWidth="1" className="transition-transform duration-200">
-                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
+              {renderSelect(
+                roomId ?? '',
+                (value) => setRoomId(value ? Number(value) : null),
+                rooms.map((room) => ({ value: room.id, label: room.label })),
+                'Select a room...'
+              )}
             </div>
 
             {/* Amenities */}
@@ -355,36 +491,16 @@ export default function BookingPage() {
               <p style={{ fontSize: '10.2px', fontWeight: 400, lineHeight: '16px', color: 'rgba(61, 90, 76, 0.6)', marginBottom: '20px', fontFamily: 'Inter' }}>
                 Choose room amenities
               </p>
-              <div className="flex justify-between items-center hover:border-opacity-80 hover:bg-gray-50 transition-all duration-200" style={{ padding: '16px', borderBottom: '2px solid rgba(61, 90, 76, 0.15)', background: 'rgba(61, 90, 76, 0.02)', borderRadius: '8px 8px 0 0' }}>
-                <select
-                  value={selectedAmenities[0]?.id || ""}
-                  onChange={(e) => {
-                    const amenity = availableAmenities.find(a => a.id === Number(e.target.value));
-                    if (amenity) setSelectedAmenities([amenity]);
-                  }}
-                  className="transition-colors duration-200"
-                  style={{
-                    width: '100%',
-                    fontSize: '18px',
-                    fontWeight: 400,
-                    lineHeight: '1px',
-                    color: '#3D5A4C',
-                    fontFamily: 'Inter',
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    cursor: 'pointer',
-                    appearance: 'none'
-                  }}
-                >
-                  {availableAmenities.map(amenity => (
-                    <option key={amenity.id} value={amenity.id}>{amenity.name}</option>
-                  ))}
-                </select>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D5A4C" strokeWidth="1" className="transition-transform duration-200">
-                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
+              {renderSelect(
+                selectedAmenities[0]?.id ?? '',
+                (value) => {
+                  const amenity = availableAmenities.find((item) => item.id === Number(value));
+                  if (amenity) {
+                    setSelectedAmenities([amenity]);
+                  }
+                },
+                availableAmenities.map((amenity) => ({ value: amenity.id, label: amenity.name }))
+              )}
             </div>
 
             {/* Date and Time */}
@@ -395,19 +511,44 @@ export default function BookingPage() {
               <p style={{ fontSize: '10.2px', fontWeight: 400, lineHeight: '16px', color: 'rgba(61, 90, 76, 0.6)', marginBottom: '20px', fontFamily: 'Inter' }}>
                 Select date and time slot
               </p>
-              <div className="relative hover:shadow-lg transition-all duration-200" style={{ width: '360px', height: '52px', background: 'rgba(255, 181, 197, 0.29)', borderRadius: '8px', border: '1px solid rgba(255, 181, 197, 0.3)' }}>
-                <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: '0', height: '24px', borderLeft: '1px solid rgba(0, 0, 0, 0.1)' }} />
-                <div className="flex h-full">
-                  <button className="flex items-center justify-center hover:bg-black hover:bg-opacity-5 transition-all duration-200" style={{ flex: 1, background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '5px 0 0 5px' }}>
-                    <svg width="24" height="24" fill="none" stroke="#10B981" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                  <button className="flex items-center justify-center hover:bg-black hover:bg-opacity-5 transition-all duration-200" style={{ flex: 1, background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '0 5px 5px 0' }}>
-                    <svg width="24" height="24" fill="none" stroke="#10B981" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </button>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 auto', minWidth: '140px' }}>
+                  <label style={{ fontSize: '10px', color: 'rgba(61, 90, 76, 0.6)', fontFamily: 'Inter', display: 'block', marginBottom: '4px' }}>
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    style={{
+                      width: '100%',
+                      fontSize: '14px',
+                      padding: '10px',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(61, 90, 76, 0.2)',
+                      fontFamily: 'Inter',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <div style={{ flex: '1 1 auto', minWidth: '140px' }}>
+                  <label style={{ fontSize: '10px', color: 'rgba(61, 90, 76, 0.6)', fontFamily: 'Inter', display: 'block', marginBottom: '4px' }}>
+                    End Time
+                  </label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    style={{
+                      width: '100%',
+                      fontSize: '14px',
+                      padding: '10px',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(61, 90, 76, 0.2)',
+                      fontFamily: 'Inter',
+                      boxSizing: 'border-box'
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -438,7 +579,15 @@ export default function BookingPage() {
               <div className="flex justify-between items-center" style={{ paddingBottom: '16px' }}>
                 <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Room</span>
                 <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>
-                  {selectedRoomType?.name ?? "—"}
+                  {selectedRoomLabel}
+                </span>
+              </div>
+              <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginBottom: '16px' }} />
+
+              <div className="flex justify-between items-center" style={{ paddingBottom: '16px' }}>
+                <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Time</span>
+                <span style={{ fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter', textAlign: 'right' }}>
+                  {startTime} - {endTime}
                 </span>
               </div>
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginBottom: '16px' }} />
@@ -450,23 +599,6 @@ export default function BookingPage() {
                 </span>
               </div>
               <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginTop: '16px' }} />
-            </div>
-
-            {/* Pricing */}
-            <div className="space-y-3" style={{ marginBottom: '32px' }}>
-              <div className="flex justify-between items-center">
-                <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Subtotal</span>
-                <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>₱{subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center" style={{ paddingBottom: '16px' }}>
-                <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>Taxes & Fees</span>
-                <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: '#FFFAF5', fontFamily: 'Inter' }}>₱{taxes.toFixed(2)}</span>
-              </div>
-              <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.32)', marginBottom: '16px' }} />
-              <div className="flex justify-between items-center" style={{ paddingTop: '8px' }}>
-                <span className={cormorantInfant.className} style={{ fontSize: '17px', fontWeight: 400, lineHeight: '28px', color: '#FFB5C5' }}>Total</span>
-                <span className={cormorantInfant.className} style={{ fontSize: '17px', fontWeight: 400, lineHeight: '28px', color: '#FFB5C5' }}>₱{total.toFixed(2)}</span>
-              </div>
             </div>
 
             {/* Error/Success Messages */}
@@ -483,38 +615,73 @@ export default function BookingPage() {
 
             {/* Confirm Button */}
             <div style={{ marginBottom: '24px' }}>
-              <button
-                onClick={handleConfirmBooking}
-                disabled={loading}
-                className="group/btn hover:scale-105 transition-all duration-200"
-                style={{
-                  width: '257px',
-                  height: '48px',
-                  background: loading ? '#ccc' : '#FFFAF5',
-                  boxShadow: '0px 4px 12px rgba(255, 181, 197, 0.3)',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '11.9px',
-                  fontWeight: 500,
-                  lineHeight: '20px',
-                  color: '#3D5A4C',
-                  fontFamily: 'Inter',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto',
-                  opacity: loading ? 0.7 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!loading) e.currentTarget.style.background = '#FFB5C5';
-                }}
-                onMouseLeave={(e) => {
-                  if (!loading) e.currentTarget.style.background = '#FFFAF5';
-                }}
-              >
-                {loading ? 'Processing...' : 'Confirm'}
-              </button>
+              {isLoggedIn ? (
+                <button
+                  onClick={handleConfirmBooking}
+                  disabled={loading}
+                  className="group/btn hover:scale-105 transition-all duration-200"
+                  style={{
+                    width: '257px',
+                    height: '48px',
+                    background: loading ? '#ccc' : '#FFFAF5',
+                    boxShadow: '0px 4px 12px rgba(255, 181, 197, 0.3)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '11.9px',
+                    fontWeight: 500,
+                    lineHeight: '20px',
+                    color: '#3D5A4C',
+                    fontFamily: 'Inter',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto',
+                    opacity: loading ? 0.7 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading) e.currentTarget.style.background = '#FFB5C5';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading) e.currentTarget.style.background = '#FFFAF5';
+                  }}
+                >
+                  {loading ? 'Processing...' : 'Confirm'}
+                </button>
+              ) : (
+                <Link href="/login" style={{ textDecoration: 'none' }}>
+                  <button
+                    type="button"
+                    className="group/btn hover:scale-105 transition-all duration-200"
+                    style={{
+                      width: '257px',
+                      height: '48px',
+                      background: '#FFFAF5',
+                      boxShadow: '0px 4px 12px rgba(255, 181, 197, 0.3)',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '11.9px',
+                      fontWeight: 500,
+                      lineHeight: '20px',
+                      color: '#3D5A4C',
+                      fontFamily: 'Inter',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#FFB5C5';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#FFFAF5';
+                    }}
+                  >
+                    Login to Book
+                  </button>
+                </Link>
+              )}
             </div>
 
             {/* Cancellation Policy */}

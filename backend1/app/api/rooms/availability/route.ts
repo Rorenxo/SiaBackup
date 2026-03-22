@@ -23,8 +23,7 @@ export async function GET(request: Request) {
         let rooms: any[] = [];
         const { data: roomData, error: roomErr } = await supabase
             .from('rooms')
-            .select('*')
-            .order('name');
+            .select('*');
 
         if (roomErr) {
             rooms = [
@@ -32,7 +31,11 @@ export async function GET(request: Request) {
                 { id: '2', name: 'Room B', floor: '6th floor', number: '602', type: 'Standard' },
             ];
         } else {
-            rooms = roomData || [];
+            rooms = (roomData || []).sort((left, right) => {
+                const leftLabel = String(left.room_number || left.number || left.name || left.id || '');
+                const rightLabel = String(right.room_number || right.number || right.name || right.id || '');
+                return leftLabel.localeCompare(rightLabel, undefined, { numeric: true, sensitivity: 'base' });
+            });
         }
         const { data: bookings, error: bookErr } = await supabase
             .from('bookings')

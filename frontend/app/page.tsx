@@ -3,6 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Cormorant, Inter, Montserrat } from "next/font/google";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import HomePage from "./home/page";
 import chtmlogo from './images/chtmlogo.png';
 import gcllgo from './images/gcllgo.jpg';
 import loginchtmbg from './images/loginchtmbg.jpg';
@@ -12,6 +15,33 @@ const inter = Inter({ subsets: ["latin"] });
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700"] });
 
 export default function LandingPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const syncSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+
+    syncSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  if (isLoggedIn) {
+    return <HomePage />;
+  }
+
   return (
     <div className={`bg-white ${inter.className}`}>
       
@@ -47,9 +77,18 @@ export default function LandingPage() {
               <Link href="/calendar" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', lineHeight: '20px' }}>
                 Calendar
               </Link>
-              <Link href="/login" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', lineHeight: '20px' }}>
-                Login
-              </Link>
+              {isLoggedIn ? (
+                <button
+                  onClick={handleLogout}
+                  style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', lineHeight: '20px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                >
+                  Logout
+                </button>
+              ) : (
+                <Link href="/login" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', lineHeight: '20px' }}>
+                  Login
+                </Link>
+              )}
             </div>
           </div>
         </div>

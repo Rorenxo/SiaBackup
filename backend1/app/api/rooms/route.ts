@@ -12,40 +12,27 @@ export async function GET(request: Request) {
     try {
         const { data, error } = await supabase
             .from('rooms')
-            .select('*')
-            .order('name');
+            .select('*');
 
         if (error) {
-            // hard coded incase
-            if (error.code === '42P01' || error.message.includes('does not exist')) {
-                return jsonWithCors([
-                    {
-                        id: '1',
-                        name: 'Room A',
-                        floor: '6th floor',
-                        number: '601',
-                        type: 'Premium',
-                        capacity: 10,
-                        amenities: ['Free WiFi', 'Breakfast', 'Private Bath', 'Smart TV'],
-                        description: 'A spacious, premium room designed for relaxation and productivity.',
-                    },
-                    {
-                        id: '2',
-                        name: 'Room B',
-                        floor: '6th floor',
-                        number: '602',
-                        type: 'Standard',
-                        capacity: 8,
-                        amenities: ['Free WiFi', 'Coffee Maker', 'Private Bath', 'LED TV'],
-                        description: 'A comfortable standard room with clean, efficient layout.',
-                    },
-                ], { status: 200 }, request);
-            } 
-
             return jsonWithCors({ error: error.message }, { status: 500 }, request);
         }
 
-        return jsonWithCors(data, { status: 200 }, request);
+        const sorted = (data || []).sort((left: any, right: any) => {
+            const leftLabel = String(left.room_number || left.number || left.name || left.id || '');
+            const rightLabel = String(right.room_number || right.number || right.name || right.id || '');
+            return leftLabel.localeCompare(rightLabel, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        // If no rooms in database, return test rooms for UI with standard IDs (1, 2)
+        if (sorted.length === 0) {
+            return jsonWithCors([
+                { id: 1, room_number: '1', name: 'Room A' },
+                { id: 2, room_number: '2', name: 'Room B' }
+            ], { status: 200 }, request);
+        }
+
+        return jsonWithCors(sorted, { status: 200 }, request);
     } catch (err: any) {
         return jsonWithCors({ error: err.message || 'Unknown error' }, { status: 500 }, request);
     }

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import logo from '../images/logos1.png'
 import gordoncolllegelogo from '../images/chtmlogo.png'
 import img1 from '../images/1.jpg'
@@ -27,6 +28,8 @@ import {
 
 export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const router = useRouter()
 
   // Room A slideshow with smooth fade transition
   const roomAImages = [img1, img2, img3, img4, img5]
@@ -60,6 +63,28 @@ export default function HomePage() {
     }, 5000)
     return () => clearInterval(intervalB)
   }, [roomBImages.length])
+
+  useEffect(() => {
+    const syncSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setIsLoggedIn(!!session)
+    }
+
+    syncSession()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session)
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.replace('/')
+  }
 
   const handleRoomAChange = (newIndex: number) => {
     if (newIndex === roomAIndex) return
@@ -99,15 +124,28 @@ export default function HomePage() {
             
             {/* Desktop Navigation - Only navigation links */}
             <nav className="hidden md:flex items-center space-x-8">
-              {['Home', 'Booking', 'Calendar'].map((item) => (
-                <a 
-                  key={item}
-                  href="/booking" 
+              <Link href="/" className="text-gray-600 hover:text-green-700 transition font-medium">
+                Home
+              </Link>
+              <Link href="/booking" className="text-gray-600 hover:text-green-700 transition font-medium">
+                Booking
+              </Link>
+              <Link href="/calendar" className="text-gray-600 hover:text-green-700 transition font-medium">
+                Calendar
+              </Link>
+              {isLoggedIn ? (
+                <button
+                  onClick={handleLogout}
                   className="text-gray-600 hover:text-green-700 transition font-medium"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
                 >
-                  {item}
-                </a>
-              ))}
+                  Logout
+                </button>
+              ) : (
+                <Link href="/login" className="text-gray-600 hover:text-green-700 transition font-medium">
+                  Login
+                </Link>
+              )}
             </nav>
             
             {/* Mobile Menu Button */}
@@ -123,11 +161,28 @@ export default function HomePage() {
           {mobileMenuOpen && (
             <div className="md:hidden py-4 border-t border-gray-100">
               <nav className="flex flex-col space-y-3">
-                {['Home', 'Booking', 'Calendar'].map((item) => (
-                  <a key={item} href="#" className="text-gray-700 hover:text-green-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition">
-                    {item}
-                  </a>
-                ))}
+                <Link href="/" className="text-gray-700 hover:text-green-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition">
+                  Home
+                </Link>
+                <Link href="/booking" className="text-gray-700 hover:text-green-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition">
+                  Booking
+                </Link>
+                <Link href="/calendar" className="text-gray-700 hover:text-green-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition">
+                  Calendar
+                </Link>
+                {isLoggedIn ? (
+                  <button
+                    onClick={handleLogout}
+                    className="text-left text-gray-700 hover:text-green-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+                  >
+                    Logout
+                  </button>
+                ) : (
+                  <Link href="/login" className="text-gray-700 hover:text-green-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition">
+                    Login
+                  </Link>
+                )}
               </nav>
             </div>
           )}
@@ -271,30 +326,12 @@ export default function HomePage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-3xl font-bold text-green-800">Room A</h3>
                   <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
-                    Premium
+                    Standard
                   </span>
                 </div>
 
                 {/* Rating */}
                 
-
-                {/* Amenities */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {[
-                    { icon: Wifi, label: 'Free WiFi' },
-                    { icon: Coffee, label: 'Breakfast' },
-                    { icon: Bath, label: 'Private Bath' },
-                    { icon: Tv, label: 'Smart TV' }
-                  ].map((item, idx) => {
-                    const Icon = item.icon
-                    return (
-                      <div key={idx} className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-full">
-                        <Icon className="w-4 h-4 text-green-600" />
-                        <span className="text-xs text-gray-700">{item.label}</span>
-                      </div>
-                    )
-                  })}
-                </div>
 
                 {/* Review */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-6">
@@ -381,24 +418,6 @@ export default function HomePage() {
 
                 {/* Rating */}
                 
-
-                {/* Amenities */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {[
-                    { icon: Wifi, label: 'Free WiFi' },
-                    { icon: Coffee, label: 'Coffee Maker' },
-                    { icon: Bath, label: 'Private Bath' },
-                    { icon: Tv, label: 'LED TV' }
-                  ].map((item, idx) => {
-                    const Icon = item.icon
-                    return (
-                      <div key={idx} className="flex items-center gap-1 bg-gray-100 px-3 py-1.5 rounded-full">
-                        <Icon className="w-4 h-4 text-green-600" />
-                        <span className="text-xs text-gray-700">{item.label}</span>
-                      </div>
-                    )
-                  })}
-                </div>
 
                 {/* Review */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-6">

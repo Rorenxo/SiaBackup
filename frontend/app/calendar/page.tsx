@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Cormorant, Inter, Montserrat } from "next/font/google";
 import { useState, useEffect } from "react";
+import { supabase } from "../../lib/supabaseClient";
 import chtmlogo from '../images/chtmlogo.png';
 import gcllgo from '../images/gcllgo.jpg';
 
@@ -18,6 +19,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(4);
   const [currentMonth, setCurrentMonth] = useState("February");
   const [currentYear, setCurrentYear] = useState(2026);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const getDayName = (day: number) => {
     const monthIndex = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(currentMonth);
@@ -28,11 +30,29 @@ export default function CalendarPage() {
   const daysInMonth = 28; // February 2026
   const firstDayOfWeek = 6; // February 1, 2026 is Sunday (index 0)
 
-  const [rooms, setRooms] = useState([
-    { name: "Room A", floor: "6th floor, Room 6**", available: true },
-    { name: "Room B", floor: "6th floor, Room 6**", available: false },
-  ]);
+  const [rooms, setRooms] = useState<Array<{ id?: string | number; name: string; floor: string; available: boolean }>>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
+
+  useEffect(() => {
+    const syncSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+
+    syncSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   // Fetch availability when date changes
   useEffect(() => {
@@ -47,13 +67,21 @@ export default function CalendarPage() {
 
         if (res.ok && data.rooms) {
           setRooms(data.rooms.map((r: any) => ({
-            name: r.name,
-            floor: r.floor ? `${r.floor}, Room ${r.number}` : `6th floor, Room 6**`,
+            id: r.id,
+            name: r.name || r.room_number || `Room ${r.number ?? 'N/A'}`,
+            floor: r.floor
+              ? `${r.floor}${r.number ? `, Room ${r.number}` : ''}`
+              : r.room_number
+                ? `Room ${r.room_number}`
+                : `Room ${r.number ?? 'N/A'}`,
             available: r.available,
           })));
+        } else {
+          setRooms([]);
         }
       } catch (err) {
         console.error('Failed to fetch availability:', err);
+        setRooms([]);
       } finally {
         setLoadingRooms(false);
       }
@@ -96,9 +124,18 @@ export default function CalendarPage() {
                 Calendar
                 <span className="absolute left-0 bottom-0 w-full" style={{ height: '0.99px', background: '#FFB5C5' }}></span>
               </Link>
-              <Link href="/login" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', fontWeight: 400, lineHeight: '20px' }}>
-                Login
-              </Link>
+              {isLoggedIn ? (
+                <button
+                  onClick={handleLogout}
+                  style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', fontWeight: 500, lineHeight: '20px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                >
+                  Logout
+                </button>
+              ) : (
+                <Link href="/login" style={{ color: 'rgba(61, 90, 76, 0.7)', fontSize: '11.9px', fontWeight: 400, lineHeight: '20px' }}>
+                  Login
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -191,8 +228,6 @@ export default function CalendarPage() {
                   {/* Days of the month */}
                   {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
                     const isSelected = day === selectedDate;
-                    const isToday = day === 22; // February 22, 2026
-                    const isUnavailable = day === 20 || day === 21; // Example unavailable dates
 
                     return (
                       <button
@@ -203,14 +238,13 @@ export default function CalendarPage() {
                           height: '48px',
                           background: isSelected ? '#F0E0E0' : 'transparent',
                           borderRadius: '9999px',
-                          color: isUnavailable ? 'rgba(61, 90, 76, 0.3)' : isSelected ? '#3D5A4C' : 'rgba(61, 90, 76, 0.8)',
+                          color: isSelected ? '#3D5A4C' : 'rgba(61, 90, 76, 0.8)',
                           fontSize: '11.9px',
                           fontWeight: 500,
                           fontFamily: 'Inter',
-                          cursor: isUnavailable ? 'not-allowed' : 'pointer',
+                          cursor: 'pointer',
                           border: 'none'
                         }}
-                        disabled={isUnavailable}
                       >
                         {day}
                       </button>
@@ -225,12 +259,8 @@ export default function CalendarPage() {
                     <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: 'rgba(61, 90, 76, 0.7)', fontFamily: 'Inter' }}>Selected</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div style={{ width: '12px', height: '12px', borderRadius: '9999px', background: '#3D5A4C' }}></div>
-                    <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: 'rgba(61, 90, 76, 0.7)', fontFamily: 'Inter' }}>Today</span>
-                  </div>
-                  <div className="flex items-center gap-3">
                     <div style={{ width: '12px', height: '12px', borderRadius: '9999px', background: '#991B1B' }}></div>
-                    <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: 'rgba(61, 90, 76, 0.7)', fontFamily: 'Inter' }}>Unavailable</span>
+                    <span style={{ fontSize: '11.9px', fontWeight: 400, lineHeight: '20px', color: 'rgba(61, 90, 76, 0.7)', fontFamily: 'Inter' }}>Unavailable Rooms</span>
                   </div>
                 </div>
               </div>
@@ -251,7 +281,11 @@ export default function CalendarPage() {
 
               {/* Room Cards */}
               <div className="space-y-6 mb-8">
-                {rooms.map((room, index) => (
+                {loadingRooms ? (
+                  <p style={{ fontSize: '13px', color: 'rgba(61, 90, 76, 0.6)' }}>Loading room availability...</p>
+                ) : rooms.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: 'rgba(61, 90, 76, 0.6)' }}>No rooms were returned for the selected date.</p>
+                ) : rooms.map((room, index) => (
                   <div key={index}>
                     <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#3D5A4C' }}>
                       {room.name}
@@ -280,8 +314,7 @@ export default function CalendarPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div style={{ fontSize: '12px', color: 'rgba(61, 90, 76, 0.7)', lineHeight: '18px' }}>
-                  Minimum stay of 2 hrs.<br />
-                  Prices include breakfast and spa access.
+                  Minimum stay of 2 hrs.
                 </div>
               </div>
 
